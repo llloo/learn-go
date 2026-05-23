@@ -26,7 +26,7 @@ func NewPostgresStore(dsn string) (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT id, title, created_at FROM tasks ORDER BY id DESC")
+	rows, err := s.db.QueryContext(ctx, "SELECT id, title, created_at, completed FROM tasks ORDER BY id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +35,7 @@ func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
 	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
-		if err := rows.Scan(&t.ID, &t.Title, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
 			continue
 		}
 		tasks = append(tasks, t)
@@ -50,9 +50,9 @@ func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
 
 func (s *PostgresStore) GetByID(ctx context.Context, id int) (task.Task, error) {
 	var t task.Task
-	row := s.db.QueryRowContext(ctx, "SELECT id, title, created_at FROM tasks WHERE id = $1", id)
+	row := s.db.QueryRowContext(ctx, "SELECT id, title, created_at, completed FROM tasks WHERE id = $1", id)
 
-	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return t, fmt.Errorf("task not found")
 		}
@@ -64,9 +64,9 @@ func (s *PostgresStore) GetByID(ctx context.Context, id int) (task.Task, error) 
 
 func (s *PostgresStore) Create(ctx context.Context, title string) (task.Task, error) {
 	var t task.Task
-	row := s.db.QueryRowContext(ctx, "INSERT INTO tasks (title) VALUES ($1) RETURNING id, title, created_at", title)
+	row := s.db.QueryRowContext(ctx, "INSERT INTO tasks (title) VALUES ($1) RETURNING id, title, created_at, completed", title)
 
-	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt); err != nil {
+	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
 		return t, err
 	}
 	return t, nil

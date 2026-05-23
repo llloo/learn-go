@@ -22,13 +22,14 @@ func migration(databaseURL string) {
 		databaseURL,
 	)
 	if err != nil {
-		if err == migrate.ErrNoChange {
-			log.Println("No migrations to run")
-			return
-		}
 		log.Fatal("Failed to create migrate instance:", err)
 	}
+	
 	if err := m.Up(); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			log.Println("No database changes needed")
+			return
+		}
 		log.Fatal("Failed to run migrations:", err)
 	}
 }

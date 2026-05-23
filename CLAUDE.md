@@ -20,6 +20,10 @@ Go learning repository for a senior Python engineer. The learning path uses a **
 - Table-driven tests (Go convention, differs from pytest parametrize)
 - No web frameworks (Gin, Echo) — learn `net/http` and `chi` fundamentals first
 
+## CRITICAL: Do NOT write code for the user
+
+This is a project-driven **learning** repository. Explain concepts, show examples, guide the approach — but do **not** write or edit Go files directly unless the user explicitly asks you to. If uncertain, ask first.
+
 ## Go environment
 
 Go is installed at `/usr/local/go/bin/go` (1.26.3, already in PATH via `.bashrc`).

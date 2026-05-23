@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"taskapi/internal/config"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
 
@@ -10,6 +11,11 @@ import (
 )
 
 func main() {
+	cfg, err := config.NewConfig()
+	if err != nil {
+		log.Fatal("Failed to load config:", err)
+	}
+
 	r := chi.NewRouter()
 	r.Use(handler.Logger)
 
@@ -20,6 +26,6 @@ func main() {
 	r.Post("/tasks", server.HandleCreateTask)
 	r.Get("/tasks/{id}", server.HandleGetTaskByID)
 
-	log.Println("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Println("Listening on :" + cfg.ServerPort)
+	log.Fatal(http.ListenAndServe(":"+cfg.ServerPort, r))
 }

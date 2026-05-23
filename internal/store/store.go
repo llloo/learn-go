@@ -1,15 +1,16 @@
 package store
 
 import (
+	"context"
 	"sync"
 	"taskapi/internal/task"
 	"time"
 )
 
 type TaskStore interface {
-	GetAll() []task.Task
-	GetByID(id int) (task.Task, bool)
-	Create(title string) task.Task
+	GetAll(ctx context.Context) []task.Task
+	GetByID(ctx context.Context, id int) (task.Task, bool)
+	Create(ctx context.Context, title string) task.Task
 }
 
 type Store struct {
@@ -25,7 +26,7 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) GetAll() []task.Task {
+func (s *Store) GetAll(ctx context.Context) []task.Task {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -38,7 +39,7 @@ func (s *Store) GetAll() []task.Task {
 	return result
 }
 
-func (s *Store) GetByID(id int) (task.Task, bool) {
+func (s *Store) GetByID(ctx context.Context, id int) (task.Task, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -46,7 +47,7 @@ func (s *Store) GetByID(id int) (task.Task, bool) {
 	return t, exists
 }
 
-func (s *Store) Create(title string) task.Task {
+func (s *Store) Create(ctx context.Context, title string) task.Task {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

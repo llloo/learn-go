@@ -3,7 +3,8 @@
     "allow": [
       "Bash(go test *)",
       "Bash(go fmt *)",
-      "Bash(go get *)"
+      "Bash(go get *)",
+      "Bash(GOPROXY=https://goproxy.cn,direct go get github.com/kelseyhightower/envconfig)"
     ]
   }
 }

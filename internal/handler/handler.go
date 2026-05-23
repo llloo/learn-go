@@ -14,9 +14,9 @@ type Server struct {
 	Store store.TaskStore
 }
 
-func (s *Server) HandleGetTasks(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) HandleGetTasks(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	tasks := s.Store.GetAll()
+	tasks := s.Store.GetAll(r.Context())
 
 	if err := json.NewEncoder(w).Encode(tasks); err != nil {
 		WriteError(w, "Failed to encode tasks", http.StatusInternalServerError)
@@ -41,7 +41,7 @@ func (s *Server) HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task := s.Store.Create(input.Title)
+	task := s.Store.Create(r.Context(), input.Title)
 	resp, err := json.Marshal(task)
 	if err != nil {
 		WriteError(w, "Failed to encode task", http.StatusInternalServerError)
@@ -62,7 +62,7 @@ func (s *Server) HandleGetTaskByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, exists := s.Store.GetByID(taskID)
+	task, exists := s.Store.GetByID(r.Context(), taskID)
 	if !exists {
 		WriteError(w, "Task not found", http.StatusNotFound)
 		return

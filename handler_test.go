@@ -69,12 +69,12 @@ func TestCreateTask(t *testing.T) {
 func TestGetTasks(t *testing.T) {
 	srv := newTestServer()
 
-	srv.Store.Create("Task 1")
-	srv.Store.Create("Task 2")
-
 	req := httptest.NewRequest(http.MethodGet, "/tasks", nil)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
+
+	srv.Store.Create(req.Context(), "Task 1")
+	srv.Store.Create(req.Context(), "Task 2")
 
 	srv.HandleGetTasks(rec, req)
 
@@ -106,7 +106,7 @@ func TestGetTaskByID(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	srv, r := newTestRouter()
-	newTask := srv.Store.Create("Task 1")
+	newTask := srv.Store.Create(req.Context(), "Task 1")
 
 	r.ServeHTTP(rec, req)
 

@@ -106,7 +106,10 @@ func TestGetTaskByID(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	srv, r := newTestRouter()
-	newTask := srv.Store.Create(req.Context(), "Task 1")
+	newTask, err := srv.Store.Create(req.Context(), "Task 1")
+	if err != nil {
+		t.Fatalf("failed to create task: %v", err)
+	}
 
 	r.ServeHTTP(rec, req)
 

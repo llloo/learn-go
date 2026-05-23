@@ -2,15 +2,16 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"taskapi/internal/task"
 	"time"
 )
 
 type TaskStore interface {
-	GetAll(ctx context.Context) []task.Task
-	GetByID(ctx context.Context, id int) (task.Task, bool)
-	Create(ctx context.Context, title string) task.Task
+	GetAll(ctx context.Context) ([]task.Task, error)
+	GetByID(ctx context.Context, id int) (task.Task, error)
+	Create(ctx context.Context, title string) (task.Task, error)
 }
 
 type Store struct {
@@ -26,7 +27,7 @@ func NewStore() *Store {
 	}
 }
 
-func (s *Store) GetAll(ctx context.Context) []task.Task {
+func (s *Store) GetAll(ctx context.Context) ([]task.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -36,18 +37,21 @@ func (s *Store) GetAll(ctx context.Context) []task.Task {
 			result = append(result, t)
 		}
 	}
-	return result
+	return result, nil
 }
 
-func (s *Store) GetByID(ctx context.Context, id int) (task.Task, bool) {
+func (s *Store) GetByID(ctx context.Context, id int) (task.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	t, exists := s.tasks[id]
-	return t, exists
+	if !exists {
+		return task.Task{}, fmt.Errorf("task not found")
+	}
+	return t, nil
 }
 
-func (s *Store) Create(ctx context.Context, title string) task.Task {
+func (s *Store) Create(ctx context.Context, title string) (task.Task, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -58,5 +62,5 @@ func (s *Store) Create(ctx context.Context, title string) task.Task {
 	}
 	s.tasks[t.ID] = t
 	s.nextID++
-	return t
+	return t, nil
 }

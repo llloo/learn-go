@@ -19,7 +19,10 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(handler.Logger)
 
-	ts := store.NewStore()
+	ts, err := store.NewPostgresStore(cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal("Failed to create Postgres store:", err)
+	}
 	server := &handler.Server{Store: ts}
 
 	r.Get("/tasks", server.HandleGetTasks)

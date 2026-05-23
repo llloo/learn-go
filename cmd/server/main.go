@@ -6,6 +6,7 @@ import (
 	"taskapi/internal/config"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
+	"errors"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-migrate/migrate/v4"

@@ -4,7 +4,7 @@ import "github.com/kelseyhightower/envconfig"
 
 type Config struct {
 	ServerPort  string `envconfig:"APP_SERVER_PORT" default:"8080"`
-	DatabaseURL string `envconfig:"APP_DATABASE_URL" default:"postgres://psql:psql@localhost:5432/psql?sslmode=disable"`
+	DatabaseURL string `envconfig:"APP_DATABASE_URL" default:"postgresql://postgres:psql@localhost:5432/myapp?sslmode=disable"`
 }
 
 func NewConfig() (*Config, error) {

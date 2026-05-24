@@ -26,13 +26,14 @@ func NewPostgresStore(dsn string) (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
+	var tasks []task.Task
+
 	rows, err := s.db.QueryContext(ctx, "SELECT id, title, created_at, completed FROM tasks ORDER BY id DESC")
 	if err != nil {
-		return nil, err
+		return tasks, err
 	}
 	defer rows.Close()
 
-	var tasks []task.Task
 	for rows.Next() {
 		var t task.Task
 		if err := rows.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
@@ -42,7 +43,7 @@ func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return tasks, err
 	}
 
 	return tasks, nil

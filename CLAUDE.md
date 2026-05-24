@@ -38,17 +38,23 @@ go vet ./...                 # Vet
 go fmt ./...                 # Format
 ```
 
-## Current project state (Phase 2 complete)
+## Current project state (Phase 3 complete)
 
 ```
 taskapi/
-├── cmd/server/main.go          # Entry point (chi router)
+├── cmd/server/main.go          # Entry point: config → migrate → PostgresStore → chi
 ├── go.mod
 ├── go.sum
-├── handler_test.go
+├── handler_test.go             # Handler tests (uses in-memory Store as fake)
+├── migrations/
+│   ├── 000001_create_tasks.up.sql
+│   └── 000001_create_tasks.down.sql
 ├── internal/
 │   ├── task/task.go            # Task struct
-│   ├── store/store.go          # TaskStore interface + in-memory Store
+│   ├── config/config.go        # envconfig: SERVER_PORT, DATABASE_URL
+│   ├── store/
+│   │   ├── store.go            # TaskStore interface + in-memory Store (test fake)
+│   │   └── postgres.go         # PostgresStore: pgx + database/sql
 │   └── handler/
 │       ├── handler.go          # HTTP handlers (chi)
 │       ├── middleware.go       # Logger middleware
@@ -62,15 +68,21 @@ taskapi/
 ## Architecture
 
 ```
-cmd/server/main.go  →  handler.Server  →  store.TaskStore (interface)
-     │                    (depends on)       ↑ implements
-     │r.Use(Logger)                    store.Store (in-memory)
-     │
-     └── Logger (middleware) → logs Method + Path
+cmd/server/main.go
+    │
+    ├── config.NewConfig()          → envconfig binds env vars
+    ├── migration()                 → golang-migrate runs *.sql files
+    ├── store.NewPostgresStore()    → PostgresStore (implements TaskStore)
+    ├── handler.Logger              → middleware: func(next http.Handler) http.Handler
+    ├── handler.Server              → depends on store.TaskStore (interface)
+    └── chi router                  → r.Get/Post + chi.URLParam
 ```
 
-- `handler.Server.Store` uses interface `store.TaskStore` — swap implementations without changing handler
-- chi router handles method routing (`r.Get`, `r.Post`) and path params (`chi.URLParam(r, "id")`)
-- Middleware pattern: `func(next http.Handler) http.Handler`, registered via `r.Use()`
+- `handler.Server.Store` uses interface `store.TaskStore` — swapped from memory to PostgresStore without handler changes
+- PostgresStore uses `pgx` driver via blank import `_ "github.com/jackc/pgx/v5/stdlib"`
+- `context.Context` flows from `r.Context()` through every store method
+- `errors.Is(err, sql.ErrNoRows)` to distinguish "not found" from real errors
+- Migrations run on startup via `golang-migrate`, idempotent (`ErrNoChange` handled)
 - Error handling: `APIError` struct + `WriteError` helper → consistent JSON `{"message": "..."}` responses
 - Packages layered: `cmd/server` → `internal/handler` → `internal/store` → `internal/task`
+- `internal/config` is independent, used only by `main.go`

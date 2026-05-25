@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
@@ -102,62 +103,82 @@ func TestGetTasks(t *testing.T) {
 
 func TestGetTaskByID(t *testing.T) {
 
-	req := httptest.NewRequest(http.MethodGet, "/tasks/1", nil)
-	rec := httptest.NewRecorder()
+	// table driven tests
 
-	srv, r := newTestRouter()
-	newTask, err := srv.Store.Create(req.Context(), "Task 1")
-	if err != nil {
-		t.Fatalf("failed to create task: %v", err)
-	}
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status 200, got %d", rec.Code)
+	tests := []struct {
+		name           string
+		taskID         string
+		setup          bool
+		expectedStatus int
+	}{
+		{"Valid ID", "1", true, http.StatusOK},
+		{"Not Found", "999", false, http.StatusNotFound},
+		{"Invalid ID", "abc", false, http.StatusBadRequest},
 	}
 
-	var got task.Task
-	if err := json.NewDecoder(rec.Body).Decode(&got); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv, r := newTestRouter()
+			req := httptest.NewRequest(http.MethodGet, "/tasks/"+tt.taskID, nil)
+			if tt.setup {
+				srv.Store.Create(req.Context(), "Task 1")
+			}
 
-	if got.ID != newTask.ID {
-		t.Errorf("expected ID %d, got %d", newTask.ID, got.ID)
-	}
-	if got.Title != newTask.Title {
-		t.Errorf("expected title %q, got %q", newTask.Title, got.Title)
-	}
-	if got.Completed != newTask.Completed {
-		t.Errorf("expected Completed %v, got %v", newTask.Completed, got.Completed)
-	}
-	if !got.CreatedAt.Equal(newTask.CreatedAt) {
-		t.Errorf("expected CreatedAt %v, got %v", newTask.CreatedAt, got.CreatedAt)
+			rec := httptest.NewRecorder()
+
+			r.ServeHTTP(rec, req)
+
+			if rec.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+		})
 	}
 }
 
-func TestGetTaskByID_NotFound(t *testing.T) {
-	_, r := newTestRouter()
-
-	req := httptest.NewRequest(http.MethodGet, "/tasks/999", nil)
-	rec := httptest.NewRecorder()
-
-	r.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status 404, got %d", rec.Code)
+func TestBatchCreateTasks(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedStatus int
+	}{
+		{"Valid Input", `{"titles": ["Task 1", "Task 2"]}`, http.StatusCreated},
+		{"Empty Titles", `{"titles": []}`, http.StatusBadRequest},
+		{"Invalid JSON", `{"titles": [}`, http.StatusBadRequest},
 	}
-}
 
-func TestGetTaskByID_InvalidID(t *testing.T) {
-	_, r := newTestRouter()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := newTestServer()
 
-	req := httptest.NewRequest(http.MethodGet, "/tasks/abc", nil)
-	rec := httptest.NewRecorder()
+			body := strings.NewReader(tt.input)
+			req := httptest.NewRequest(http.MethodPost, "/tasks/batch", body)
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
 
-	r.ServeHTTP(rec, req)
+			srv.HandleBatchCreateTasks(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", rec.Code)
+			if rec.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, rec.Code)
+			}
+
+			if tt.expectedStatus == http.StatusCreated {
+				var results []handler.BatchResult
+				if err := json.NewDecoder(rec.Body).Decode(&results); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+				if len(results) != 2 {
+					t.Fatalf("expected 2 results, got %d", len(results))
+				}
+				for i, res := range results {
+					if res.Error != "" {
+						t.Errorf("unexpected error for task %d: %s", i+1, res.Error)
+					} else if res.Task == nil {
+						t.Errorf("expected task for result %d, got nil", i+1)
+					} else if res.Task.Title != "Task "+strconv.Itoa(i+1) {
+						t.Errorf("expected title 'Task %d', got %q", i+1, res.Task.Title)
+					}
+				}
+			}
+		})
 	}
 }

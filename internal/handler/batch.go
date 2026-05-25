@@ -7,7 +7,7 @@ import (
 	"taskapi/internal/task"
 )
 
-type batchResult struct {
+type BatchResult struct {
 	Task  *task.Task `json:"task"`
 	Error string     `json:"error,omitempty"`
 	Index int        `json:"index"`
@@ -34,16 +34,16 @@ func (s *Server) HandleBatchCreateTasks(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	ch := make(chan batchResult, len(input.Titles))
-	results := make([]batchResult, len(input.Titles))
+	ch := make(chan BatchResult, len(input.Titles))
+	results := make([]BatchResult, len(input.Titles))
 	for i, title := range input.Titles {
 		go func(t string, i int) {
 			created, err := s.Store.Create(r.Context(), t)
 			if err != nil {
-				ch <- batchResult{Error: err.Error(), Index: i}
+				ch <- BatchResult{Error: err.Error(), Index: i}
 				return
 			}
-			ch <- batchResult{Task: &created, Index: i}
+			ch <- BatchResult{Task: &created, Index: i}
 		}(title, i)
 	}
 

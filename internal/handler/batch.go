@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"taskapi/internal/task"
+	"time"
 )
 
 type BatchResult struct {
@@ -35,9 +36,13 @@ func (s *Server) HandleBatchCreateTasks(w http.ResponseWriter, r *http.Request) 
 	}
 
 	ch := make(chan BatchResult, len(input.Titles))
+	sem := make(chan struct{}, 5) // Limit to 5 concurrent creations
 	results := make([]BatchResult, len(input.Titles))
+
 	for i, title := range input.Titles {
 		go func(t string, i int) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			created, err := s.Store.Create(r.Context(), t)
 			if err != nil {
 				ch <- BatchResult{Error: err.Error(), Index: i}
@@ -47,12 +52,25 @@ func (s *Server) HandleBatchCreateTasks(w http.ResponseWriter, r *http.Request) 
 		}(title, i)
 	}
 
+	timeout := time.After(5 * time.Second)
 	for i := 0; i < len(input.Titles); i++ {
-		result := <-ch
-		results[result.Index] = result
+
+		select {
+		case res := <-ch:
+			results[res.Index] = res
+		case <-r.Context().Done():
+			WriteError(w, "Request cancelled", http.StatusRequestTimeout)
+			return
+		case <-timeout:
+			WriteError(w, "Batch processing timed out", http.StatusGatewayTimeout)
+			return
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(results)
+	if err := json.NewEncoder(w).Encode(results); err != nil {
+		WriteError(w, "Failed to encode response", http.StatusInternalServerError)
+		return
+	}
 }

@@ -131,6 +131,25 @@ func TestGetTaskByID(t *testing.T) {
 			if rec.Code != tt.expectedStatus {
 				t.Fatalf("expected status %d, got %d", tt.expectedStatus, rec.Code)
 			}
+
+			if rec.Code == http.StatusOK {
+				var task task.Task
+				if err := json.NewDecoder(rec.Body).Decode(&task); err != nil {
+					t.Fatalf("failed to decode response: %v", err)
+				}
+				if task.ID != 1 {
+					t.Errorf("expected ID 1, got %d", task.ID)
+				}
+				if task.Title != "Task 1" {
+					t.Errorf("expected title 'Task 1', got %q", task.Title)
+				}
+				if task.Completed {
+					t.Error("expected Completed to be false (zero value)")
+				}
+				if task.CreatedAt.IsZero() {
+					t.Error("expected CreatedAt to be set")
+				}
+			}
 		})
 	}
 }

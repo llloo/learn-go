@@ -26,7 +26,7 @@ func NewPostgresStore(dsn string) (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
-	var tasks []task.Task
+	tasks := make([]task.Task, 0)
 
 	rows, err := s.db.QueryContext(ctx, "SELECT id, title, created_at, completed FROM tasks ORDER BY id DESC")
 	if err != nil {

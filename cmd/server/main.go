@@ -1,12 +1,12 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"taskapi/internal/config"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
-	"errors"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/golang-migrate/migrate/v4"
@@ -25,7 +25,7 @@ func migration(databaseURL string) {
 	if err != nil {
 		log.Fatal("Failed to create migrate instance:", err)
 	}
-	
+
 	if err := m.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
 			log.Println("No database changes needed")
@@ -55,6 +55,7 @@ func main() {
 	r.Get("/tasks", server.HandleGetTasks)
 	r.Post("/tasks", server.HandleCreateTask)
 	r.Get("/tasks/{id}", server.HandleGetTaskByID)
+	r.Post("/tasks/batch", server.HandleBatchCreateTasks)
 
 	log.Println("Listening on :" + cfg.ServerPort)
 	log.Fatal(http.ListenAndServe(":"+cfg.ServerPort, r))

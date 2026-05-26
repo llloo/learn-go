@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"taskapi/internal/task"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -38,7 +38,7 @@ func (s *PostgresStore) GetAll(ctx context.Context) ([]task.Task, error) {
 	for rows.Next() {
 		var t task.Task
 		if err := rows.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
-			log.Printf("failed to scan row: %v", err)
+			slog.Error("failed to scan row", "error", err)
 			continue
 		}
 		tasks = append(tasks, t)
@@ -59,6 +59,7 @@ func (s *PostgresStore) GetByID(ctx context.Context, id int) (task.Task, error) 
 		if errors.Is(err, sql.ErrNoRows) {
 			return t, fmt.Errorf("task not found")
 		}
+		slog.Error("failed to scan row", "error", err)
 		return t, err
 	}
 

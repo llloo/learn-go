@@ -1,9 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"taskapi/internal/config"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
@@ -23,22 +27,30 @@ func migration(databaseURL string) {
 		databaseURL,
 	)
 	if err != nil {
-		log.Fatal("Failed to create migrate instance:", err)
+		slog.Error("Failed to create migrate instance", "error", err)
+		os.Exit(1)
 	}
 
 	if err := m.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {
-			log.Println("No database changes needed")
+			slog.Info("No database changes needed")
 			return
 		}
-		log.Fatal("Failed to run migrations:", err)
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
 	}
 }
 
 func main() {
+	logHandler := slog.NewJSONHandler(os.Stdout, nil)
+	logger := slog.New(logHandler)
+
+	slog.SetDefault(logger)
+
 	cfg, err := config.NewConfig()
 	if err != nil {
-		log.Fatal("Failed to load config:", err)
+		slog.Error("Failed to load config", "error", err)
+		os.Exit(1)
 	}
 
 	migration(cfg.DatabaseURL)
@@ -48,7 +60,8 @@ func main() {
 
 	ts, err := store.NewPostgresStore(cfg.DatabaseURL)
 	if err != nil {
-		log.Fatal("Failed to create Postgres store:", err)
+		slog.Error("Failed to create Postgres store", "error", err)
+		os.Exit(1)
 	}
 	server := &handler.Server{Store: ts}
 
@@ -57,6 +70,28 @@ func main() {
 	r.Get("/tasks/{id}", server.HandleGetTaskByID)
 	r.Post("/tasks/batch", server.HandleBatchCreateTasks)
 
-	log.Println("Listening on :" + cfg.ServerPort)
-	log.Fatal(http.ListenAndServe(":"+cfg.ServerPort, r))
+	// 优雅退出
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	srv := &http.Server{
+		Addr:    ":" + cfg.ServerPort,
+		Handler: r,
+	}
+
+	go func() {
+		slog.Info("Starting server on " + cfg.ServerPort)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("Shutting down server")
+	if err := srv.Shutdown(context.Background()); err != nil {
+		slog.Error("Failed to shutdown server", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Server gracefully stopped")
 }

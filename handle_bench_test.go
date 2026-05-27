@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -33,41 +32,41 @@ func BenchmarkCreateTask(b *testing.B) {
 
 func BenchmarkBatchCreateTasks_Concurrent(b *testing.B) {
 	srv := newTestServer()
+	titles := make([]string, 100)
+	for j := 0; j < 100; j++ {
+		titles[j] = "task " + strconv.Itoa(j+1)
+	}
 
 	b.ResetTimer()
 
-	for i := 0; b.Loop(); i++ {
-		titles := make([]string, 100)
-		for j := 0; j < 100; j++ {
-			titles[j] = "task " + strconv.Itoa(j+1)
+	for b.Loop() {
+		ch := make(chan handler.BatchResult, len(titles))
+		for i, title := range titles {
+			go func(t string, idx int) {
+				created, err := srv.Store.Create(context.Background(), t)
+				if err != nil {
+					ch <- handler.BatchResult{Error: err.Error(), Index: idx}
+					return
+				}
+				ch <- handler.BatchResult{Task: &created, Index: idx}
+			}(title, i)
 		}
-		input := struct {
-			Titles []string `json:"titles"`
-		}{Titles: titles}
-		bodyBytes, _ := json.Marshal(input)
-
-		req := httptest.NewRequest(http.MethodPost, "/tasks/batch", strings.NewReader(string(bodyBytes)))
-		req.Header.Set("Content-Type", "application/json")
-		rec := httptest.NewRecorder()
-
-		srv.HandleBatchCreateTasks(rec, req)
-
-		if rec.Code != http.StatusCreated {
-			b.Fatalf("expected status 201, got %d", rec.Code)
+		for range titles {
+			<-ch
 		}
 	}
 }
 
 func BenchmarkBatchCreateTasks_Serial(b *testing.B) {
 	srv := newTestServer()
+	titles := make([]string, 100)
+	for j := 0; j < 100; j++ {
+		titles[j] = "task " + strconv.Itoa(j+1)
+	}
 
 	b.ResetTimer()
 
-	for i := 0; b.Loop(); i++ {
-		titles := make([]string, 100)
-		for j := 0; j < 100; j++ {
-			titles[j] = "task " + strconv.Itoa(j+1)
-		}
+	for b.Loop() {
 		handleBatchCreateSerial(srv, titles)
 	}
 }

@@ -8,7 +8,8 @@
       "Bash(/usr/local/go/bin/go test *)",
       "Bash(go vet *)",
       "Bash(go build *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(go install *)"
     ]
   }
 }

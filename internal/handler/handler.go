@@ -59,7 +59,7 @@ func (s *Server) HandleCreateTask(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write(resp)
+	_, _ = w.Write(resp)
 
 }
 
@@ -84,6 +84,6 @@ func (s *Server) HandleGetTaskByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.Write(resp)
+	_, _ = w.Write(resp)
 }
 

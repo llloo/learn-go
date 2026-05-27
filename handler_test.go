@@ -74,8 +74,8 @@ func TestGetTasks(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
-	srv.Store.Create(req.Context(), "Task 1")
-	srv.Store.Create(req.Context(), "Task 2")
+	_, _ = srv.Store.Create(req.Context(), "Task 1")
+	_, _ = srv.Store.Create(req.Context(), "Task 2")
 
 	srv.HandleGetTasks(rec, req)
 
@@ -121,7 +121,7 @@ func TestGetTaskByID(t *testing.T) {
 			srv, r := newTestRouter()
 			req := httptest.NewRequest(http.MethodGet, "/tasks/"+tt.taskID, nil)
 			if tt.setup {
-				srv.Store.Create(req.Context(), "Task 1")
+				_, _ = srv.Store.Create(req.Context(), "Task 1")
 			}
 
 			rec := httptest.NewRecorder()

@@ -37,15 +37,21 @@ go test -run TestName ./...  # Run a single test
 go test -bench=. -benchmem ./...  # Run benchmarks
 go vet ./...                 # Vet
 go fmt ./...                 # Format
+make build                   # Build binary via Makefile
+make test                    # Run tests via Makefile
+make lint                    # golangci-lint
 ```
 
-## Current project state (Phase 4 complete, Phase 5 in progress)
+## Current project state (All 5 phases complete)
 
 ```
 taskapi/
 ├── cmd/server/main.go          # Entry point: config → migrate → PostgresStore → chi
-├── go.mod
-├── go.sum
+├── Dockerfile                  # Multi-stage (golang:1.26-alpine → alpine)
+├── .dockerignore
+├── Makefile                    # build, test, bench, vet, lint, docker-build, clean
+├── .golangci.yml               # errcheck + govet + ineffassign
+├── go.mod / go.sum
 ├── handler_test.go             # Handler tests (in-memory Store as fake)
 ├── handle_bench_test.go        # Benchmark tests (serial vs concurrent)
 ├── migrations/
@@ -94,6 +100,9 @@ cmd/server/main.go
 - `slog.Error` + `os.Exit(1)` manual exit (slog doesn't exit like log.Fatal)
 - `signal.NotifyContext`: context cancelled on SIGINT/SIGTERM → `srv.Shutdown()`
 - Server runs in goroutine, main blocks on `<-ctx.Done()`
+- Docker multi-stage build: `golang:1.26-alpine` (builder) → `alpine` (runtime, ~15MB binary)
+- Makefile: `make build/test/bench/vet/lint/docker-build/clean`
+- `golangci-lint` with `errcheck`, `govet`, `ineffassign` linters
 
 ### Core patterns (all phases)
 - `handler.Server.Store` uses interface `store.TaskStore` — swap memory/PostgresStore

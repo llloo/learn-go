@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -87,3 +88,67 @@ func (s *Server) HandleGetTaskByID(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(resp)
 }
 
+func (s *Server) HandlePartialUpdateTask(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	taskID, err := strconv.Atoi(idStr)
+	if err != nil || idStr == "" {
+		WriteError(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteError(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	var input struct {
+		Title     *string `json:"title"`
+		Completed *bool   `json:"completed"`
+	}
+	if err := json.Unmarshal(body, &input); err != nil {
+		WriteError(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+
+	task, err := s.Store.PartialUpdate(r.Context(), taskID, input.Title, input.Completed)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			WriteError(w, "Task not found", http.StatusNotFound)
+		} else {
+			WriteError(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	resp, err := json.Marshal(task)
+	if err != nil {
+		WriteError(w, "Failed to encode task", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(resp)
+}
+
+func (s *Server) HandleDeleteTask(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	taskID, err := strconv.Atoi(idStr)
+	if err != nil || idStr == "" {
+		WriteError(w, "Invalid task ID", http.StatusBadRequest)
+		return
+	}
+
+	err = s.Store.Delete(r.Context(), taskID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			WriteError(w, "Task not found", http.StatusNotFound)
+		} else {
+			WriteError(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

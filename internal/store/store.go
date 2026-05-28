@@ -8,10 +8,14 @@ import (
 	"time"
 )
 
+var ErrNotFound = fmt.Errorf("task not found")
+
 type TaskStore interface {
 	GetAll(ctx context.Context) ([]task.Task, error)
 	GetByID(ctx context.Context, id int) (task.Task, error)
 	Create(ctx context.Context, title string) (task.Task, error)
+	PartialUpdate(ctx context.Context, id int, title *string, completed *bool) (task.Task, error)
+	Delete(ctx context.Context, id int) error
 }
 
 type Store struct {
@@ -46,7 +50,7 @@ func (s *Store) GetByID(ctx context.Context, id int) (task.Task, error) {
 
 	t, exists := s.tasks[id]
 	if !exists {
-		return task.Task{}, fmt.Errorf("task not found")
+		return task.Task{}, ErrNotFound
 	}
 	return t, nil
 }
@@ -62,5 +66,35 @@ func (s *Store) Create(ctx context.Context, title string) (task.Task, error) {
 	}
 	s.tasks[t.ID] = t
 	s.nextID++
+	return t, nil
+}
+
+func (s *Store) Delete(ctx context.Context, id int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.tasks[id]; !exists {
+		return ErrNotFound
+	}
+
+	delete(s.tasks, id)
+	return nil
+}
+
+func (s *Store) PartialUpdate(ctx context.Context, id int, title *string, completed *bool) (task.Task, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	t, exists := s.tasks[id]
+	if !exists {
+		return task.Task{}, ErrNotFound
+	}
+	if title != nil {
+		t.Title = *title
+	}
+	if completed != nil {
+		t.Completed = *completed
+	}
+	s.tasks[id] = t
 	return t, nil
 }

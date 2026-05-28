@@ -69,6 +69,8 @@ func main() {
 	r.Post("/tasks", server.HandleCreateTask)
 	r.Get("/tasks/{id}", server.HandleGetTaskByID)
 	r.Post("/tasks/batch", server.HandleBatchCreateTasks)
+	r.Delete("/tasks/{id}", server.HandleDeleteTask)
+	r.Patch("/tasks/{id}", server.HandlePartialUpdateTask)
 
 	// 优雅退出
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

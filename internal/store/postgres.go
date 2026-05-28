@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"log/slog"
 	"taskapi/internal/task"
 
@@ -57,7 +56,7 @@ func (s *PostgresStore) GetByID(ctx context.Context, id int) (task.Task, error) 
 
 	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return t, fmt.Errorf("task not found")
+			return t, ErrNotFound
 		}
 		slog.Error("failed to scan row", "error", err)
 		return t, err
@@ -74,4 +73,33 @@ func (s *PostgresStore) Create(ctx context.Context, title string) (task.Task, er
 		return t, err
 	}
 	return t, nil
+}
+
+func (s *PostgresStore) PartialUpdate(ctx context.Context, id int, title *string, completed *bool) (task.Task, error) {
+	var t task.Task
+	row := s.db.QueryRowContext(ctx, "UPDATE tasks SET title = COALESCE($1, title), completed = COALESCE($2, completed) WHERE id = $3 RETURNING id, title, created_at, completed", title, completed, id)
+
+	if err := row.Scan(&t.ID, &t.Title, &t.CreatedAt, &t.Completed); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return t, ErrNotFound
+		}
+		slog.Error("failed to scan row", "error", err)
+		return t, err
+	}
+	return t, nil
+}
+
+func (s *PostgresStore) Delete(ctx context.Context, id int) error {
+	result, err := s.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = $1", id)
+	if err != nil {
+		return err
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

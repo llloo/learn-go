@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"taskapi/internal/auth"
 	"taskapi/internal/config"
 	"taskapi/internal/handler"
 	"taskapi/internal/store"
@@ -63,14 +64,22 @@ func main() {
 		slog.Error("Failed to create Postgres store", "error", err)
 		os.Exit(1)
 	}
-	server := &handler.Server{Store: ts}
+
+	authService := auth.NewService(cfg.JWTSecret)
+	server := &handler.Server{Store: ts, Auth: authService}
+
+	r.Group(func(r chi.Router) {
+		r.Use(server.RequireAuth)
+		r.Post("/tasks", server.HandleCreateTask)
+		r.Post("/tasks/batch", server.HandleBatchCreateTasks)
+		r.Delete("/tasks/{id}", server.HandleDeleteTask)
+		r.Patch("/tasks/{id}", server.HandlePartialUpdateTask)
+	})
 
 	r.Get("/tasks", server.HandleGetTasks)
-	r.Post("/tasks", server.HandleCreateTask)
 	r.Get("/tasks/{id}", server.HandleGetTaskByID)
-	r.Post("/tasks/batch", server.HandleBatchCreateTasks)
-	r.Delete("/tasks/{id}", server.HandleDeleteTask)
-	r.Patch("/tasks/{id}", server.HandlePartialUpdateTask)
+
+	r.Post("/auth/login", server.HandleUserLogin)
 
 	// 优雅退出
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

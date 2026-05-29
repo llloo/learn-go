@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"taskapi/internal/auth"
 	"taskapi/internal/store"
 
 	"github.com/go-chi/chi/v5"
@@ -13,6 +14,7 @@ import (
 
 type Server struct {
 	Store store.TaskStore
+	Auth  *auth.Service
 }
 
 func (s *Server) HandleGetTasks(w http.ResponseWriter, r *http.Request) {

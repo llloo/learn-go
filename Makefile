@@ -27,3 +27,6 @@ docker-build:
 
 clean:
 	rm -rf $(BUILD_DIR)
+
+test-integration:
+	go test -tags=integration -v ./internal/store/...

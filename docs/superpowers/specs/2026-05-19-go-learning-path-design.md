@@ -92,6 +92,23 @@ A CRUD REST API for task management — domain is intentionally simple (zero bus
 
 **Deliverable:** Production-ready service with Dockerfile and Makefile
 
+## Phase 6: Authentication (JWT) — completed May 2026
+
+**Theme:** Add token-based auth after the project was production-shaped. The motivation was "make routes protected" — which forces learning middleware chaining, request context propagation, and secret management, all concepts Python web devs know from Flask/Django but with Go's different idioms.
+
+**Concepts covered:**
+
+- `golang-jwt/jwt/v5`: HS256 signing, `MapClaims`, `GenerateToken` / `ValidateToken`
+- Middleware as `func(http.Handler) http.Handler`, chained via `chi`'s `r.Group(...)` route scoping
+- Verifying signing method (HMAC check) to prevent alg-confusion attacks
+- Typed context keys (`type contextKey string`) + `context.WithValue` to pass `user_id` from middleware to handlers
+- Dependency injection: `handler.Server` gains an `Auth` field, wired in `main.go`
+- Env-based secret config (`APP_JWT_SECRET`)
+
+**Deliverable:** `POST /auth/login` + `RequireAuth` middleware protecting write endpoints
+
+**Known simplifications (deliberate, future learning targets):** hardcoded user with no password check, no user table/migration, JWT stored in a single shared secret rather than key pairs, no token expiry validation tuning, no auth tests yet.
+
 ## Key Design Decisions
 
 1. **Standard library first, third-party later.** Phase 1 uses `net/http` directly. Phase 2 introduces `chi`. This ensures understanding of what the router abstracts.

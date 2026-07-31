@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Go learning repository for a senior Python engineer. The learning path uses a **single growing project** (Task REST API) structured in 5 phases. Full spec: [docs/superpowers/specs/2026-05-19-go-learning-path-design.md](docs/superpowers/specs/2026-05-19-go-learning-path-design.md)
+Go learning repository for a senior Python engineer. The learning path uses a **single growing project** (Task REST API) structured in 5 phases plus a JWT auth extension. Full spec: [docs/superpowers/specs/2026-05-19-go-learning-path-design.md](docs/superpowers/specs/2026-05-19-go-learning-path-design.md)
 
 ## User context
 
@@ -42,31 +42,35 @@ make test                    # Run tests via Makefile
 make lint                    # golangci-lint
 ```
 
-## Current project state (All 5 phases complete)
+## Current project state (5 phases + JWT auth complete)
+
+The repository root **is** the Go module (`module taskapi` in `go.mod`) — files live at the root, not in a `taskapi/` subdirectory.
 
 ```
-taskapi/
-├── cmd/server/main.go          # Entry point: config → migrate → PostgresStore → chi
+.  (module: taskapi)
+├── cmd/server/main.go          # Entry point: config → migrate → PostgresStore → auth → chi
 ├── Dockerfile                  # Multi-stage (golang:1.26-alpine → alpine)
 ├── .dockerignore
 ├── Makefile                    # build, test, bench, vet, lint, docker-build, clean
 ├── .golangci.yml               # errcheck + govet + ineffassign
 ├── go.mod / go.sum
-├── handler_test.go             # Handler tests (in-memory Store as fake)
+├── handler_test.go             # Black-box tests, `package main` at repo root (imports internal/*)
 ├── handle_bench_test.go        # Benchmark tests (serial vs concurrent)
 ├── migrations/
 │   ├── 000001_create_tasks.up.sql
 │   └── 000001_create_tasks.down.sql
 ├── internal/
 │   ├── task/task.go            # Task struct
-│   ├── config/config.go        # envconfig: APP_SERVER_PORT, APP_DATABASE_URL
+│   ├── config/config.go        # envconfig: APP_SERVER_PORT, APP_DATABASE_URL, APP_JWT_SECRET
+│   ├── auth/auth.go            # auth.Service: JWT HS256 generate/validate (golang-jwt/v5)
 │   ├── store/
 │   │   ├── store.go            # TaskStore interface + in-memory Store (test fake)
 │   │   └── postgres.go         # PostgresStore: pgx + database/sql
 │   └── handler/
-│       ├── handler.go          # HTTP handlers (chi)
+│       ├── handler.go          # CRUD handlers + Server struct (Store + Auth)
+│       ├── auth.go             # HandleUserLogin
 │       ├── batch.go            # BatchResult + HandleBatchCreateTasks
-│       ├── middleware.go       # Logger middleware (slog)
+│       ├── middleware.go       # Logger + RequireAuth (JWT) middleware
 │       └── error.go            # APIError + WriteError
 └── docs/
     ├── python-go-cheatsheet.md
@@ -79,14 +83,20 @@ taskapi/
 ```
 cmd/server/main.go
     │
-    ├── config.NewConfig()              → envconfig binds env vars
+    ├── config.NewConfig()              → envconfig binds env vars (incl. APP_JWT_SECRET)
     ├── slog.NewJSONHandler()           → structured JSON logging
     ├── migration()                     → golang-migrate runs *.sql files
     ├── store.NewPostgresStore()        → PostgresStore (implements TaskStore)
+    ├── auth.NewService()               → JWT sign/verify (HS256)
+    ├── handler.Server                  → {Store: TaskStore, Auth: *auth.Service}
     ├── handler.Logger (middleware)     → slog: method + path
-    ├── handler.Server                  → depends on store.TaskStore (interface)
-    ├── chi router                      → r.Get/Post + chi.URLParam + r.Post batch
+    ├── handler.RequireAuth (middleware)→ validates Bearer token, injects user_id into ctx
+    ├── chi router                      → r.Group protected vs public routes
     └── signal.NotifyContext            → graceful shutdown on SIGINT/SIGTERM
+
+Routes:
+    PUBLIC     GET /tasks, GET /tasks/{id}, POST /auth/login
+    PROTECTED  POST /tasks, POST /tasks/batch, PATCH /tasks/{id}, DELETE /tasks/{id} (RequireAuth)
 ```
 
 ### Concurrency (Phase 4)
@@ -104,11 +114,27 @@ cmd/server/main.go
 - Makefile: `make build/test/bench/vet/lint/docker-build/clean`
 - `golangci-lint` with `errcheck`, `govet`, `ineffassign` linters
 
+### Authentication (Phase 6, JWT)
+- `auth.Service` (internal/auth): `GenerateToken(userID)` / `ValidateToken(tokenStr)`
+  - `golang-jwt/jwt/v5`, HS256, `jwt.MapClaims` with `user_id` + `exp` (24h)
+  - ValidateToken verifies signing method is HMAC (alg-confusion guard) then returns `user_id`
+- `handler.RequireAuth` middleware: `Authorization: Bearer <token>` → `ValidateToken` → `context.WithValue(ctx, UserIDKey, userID)` → `handler.GetUserID(ctx)`
+- `contextKey` typed string type — idiomatic Go way to avoid context-key collisions (Python analog: enum/keys module)
+- `POST /auth/login` returns a token; **stub**: hardcoded `user123`, no password check, no user table
+- `Server` struct now holds `{Store, Auth}` — middleware and handlers share the same dependency injection point
+- JWTSecret via `APP_JWT_SECRET` env var (has a `"your-secret-key"` default — fine for learning, change for prod)
+
+### Known gaps (learning opportunities, not bugs)
+- JWT auth has **no tests yet** — `internal/auth` and `RequireAuth` are untested
+- Login is a stub (no real users/passwords); `exp` is not validated explicitly by RequireAuth (jwt.Parse does it via claims validation)
+- Root-level tests are `package main` in a directory with no non-test .go files — builds fine, but unconventional; a normal black-box layout would put them in `internal/handler` as `package handler_test`
+
 ### Core patterns (all phases)
 - `handler.Server.Store` uses interface `store.TaskStore` — swap memory/PostgresStore
 - `context.Context` flows from `r.Context()` through every store method
 - `errors.Is(err, sql.ErrNoRows)` to distinguish "not found" from real errors
 - Migrations run on startup via `golang-migrate`, idempotent (`ErrNoChange` handled)
 - Error handling: `APIError` struct + `WriteError` helper → consistent JSON `{"message": "..."}` responses
-- Packages layered: `cmd/server` → `internal/handler` → `internal/store` → `internal/task`
+- Packages layered: `cmd/server` → `internal/handler` → `internal/store` → `internal/task`; `internal/auth` sits beside handler (used by middleware + login handler)
 - `internal/config` is independent, used only by `main.go`
+- Context values: typed `contextKey` + `context.WithValue` + `GetUserID(ctx)` accessor — values cross handler→middleware boundaries without globals

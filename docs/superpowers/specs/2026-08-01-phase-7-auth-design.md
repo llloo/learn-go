@@ -90,7 +90,7 @@ type UserStore interface {
 }
 ```
 
-- Memory fake: `map[string]*user.User` keyed by username + `sync.RWMutex` — mirrors the TaskStore fake pattern
+- Memory fake: `map[string]*user.User` keyed by username + `sync.Mutex` — mirrors the TaskStore fake pattern (the existing `Store` fake uses `sync.Mutex`)
 - `PostgresUserStore` in `postgres.go`: `INSERT ... RETURNING`, `WHERE username = $1`, `sql.ErrNoRows` → `store.ErrNotFound`
 - New domain error: `store.ErrConflict` — returned by both fake (pre-check map) and Postgres (23505 → ErrConflict). Handler maps it to 409
 
@@ -133,16 +133,16 @@ Input validation lives in a small `validateCredentials(username, password string
 
 ### Test plan
 
-All new tests are table-driven (project convention). New files:
+All new tests are table-driven (project convention). Handler-level tests follow the existing convention: black-box `package main` at the repo root (they reuse the unexported `newTestServer` helper). New files:
 
-- `internal/auth/auth_test.go`
-  - Generate/Validate round-trip; expired token (`exp` in the past); tampered token; wrong signing algorithm (RS256/`alg=none` → rejected)
+- `internal/auth/auth_test.go` (package `auth`)
+  - Generate/Validate round-trip; expired token (`exp` in the past); tampered token; wrong signing algorithm (`alg=none` → rejected)
   - Hash/Verify: correct round-trip; wrong password fails
-- `internal/handler/auth_test.go`
+- `auth_test.go` at repo root (package `main`)
   - Register: success / duplicate username (409) / short password (400)
-  - Login: success / unknown user (401) / wrong password (401)
+  - Login: success / unknown user (401) / wrong password (401) — both 401s return the identical body
   - RequireAuth: missing header (401) / wrong format (401) / invalid token (401) / valid token → `GetUserID(ctx)` returns user_id
-- `handler_test.go`: `newTestServer` gains an `Auth: auth.NewService(...)` field (currently nil)
+- `handler_test.go`: `newTestServer` gains `Auth` and `Users` fields (currently `Auth` is nil)
 
 Test style: in-memory fakes for stores + real `auth.Service` — no mock library, consistent with existing tests.
 
